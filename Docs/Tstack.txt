@@ -1,0 +1,16 @@
+Component,Technology,Why this choice?
+
+Model,SigLIP (google/siglip-so400m-patch14-384),
+    "It is the 2025 successor to CLIP. Smaller, faster, and much more accurate at zero-shot retrieval than standard OpenAI CLIP."
+
+Vector DB,FAISS (Facebook AI Similarity Search),
+    "The industry standard for speed. We will use it in ""CPU mode"" which is blazing fast for <1M vectors."
+
+Video Tool,FFmpeg (via subprocess in Python),
+    Nothing beats FFmpeg for raw video processing speed.
+
+Backend,FastAPI,Faster than Flask/Django. 
+    Built for ML. Supports async/await.
+
+Frontend,Flutter (Desktop/Mobile),
+    "Your strength. Allows you to build a beautiful ""Gallery"" UI."

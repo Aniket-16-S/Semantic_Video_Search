@@ -1,0 +1,27 @@
+Step 1: 
+Intelligent Frame Extraction (The Speed Secret)
+Problem: A 1-minute video has 1,800 frames (at 30fps). 
+Embedding all of them is slow and useless (frames look the same).
+Solution: 1 FPS Sampling.We only extract 1 frame per second. 
+This reduces data by 30x without losing semantic meaning.
+Implementation: Use Python's subprocess to call FFmpeg directly.
+Python# Efficiently extract 1 frame per second, resize to 224px (model size)
+
+ffmpeg -i input.mp4 -vf "fps=1,scale=224:224" -q:v 2 frames/%04d.jpg
+
+
+
+Step 2: Batch Embedding (The Throughput Secret)
+Problem: Feeding images one by one into the model is too slow.
+Solution: Batch Processing.
+Load 32 or 64 images at a time and feed them to SigLIP.
+Architecture:Load SigLIP using HuggingFace transformers.
+Pass a batch of images (Tensor shape: [32, 3, 224, 224]).
+Output: A matrix of vectors (Shape: [32, 768]).
+Normalize the vectors (Crucial for Cosine Similarity).
+
+Step 3: Indexing with FAISSProblem: Comparing your query vector against 10,000 video vectors using a for loop is slow.Solution: FAISS IndexFlatIP.IndexFlatIP = Exact Inner Product (Cosine Similarity).Even with 100 videos (~30,000 frames), this index is instant (< 5ms) on a modern CPU. You don't need complex HNSW graphs for this scale, but using FAISS proves you know the tool
+
+
+
+Step 4 : The System Workflow (How it runs)A. Ingestion (Run once when adding videos)User drops a folder of videos into the app.Backend scans files and checks a local SQLite DB (to avoid re-processing).FFmpeg extracts frames to a temporary folder.SigLIP Model converts frames to Vectors.Metadata Store: We save a mapping in SQLite:Vector_ID_0 $\rightarrow$ {video_path: "vacation.mp4", timestamp: 0s}Vector_ID_1 $\rightarrow$ {video_path: "vacation.mp4", timestamp: 1s}Vector Store: We add vectors to the FAISS Index and save index.faiss to disk.B. Searching (Real-time)User types "Birthday cake" in Flutter.Flutter sends GET /search?q=Birthday cake to FastAPI.FastAPI:Tokenizes text.Runs SigLIP text encoder $\rightarrow$ gets Query_Vector.Calls faiss_index.search(Query_Vector, k=5).FAISS returns the IDs of the top 5 closest frames (e.g., ID 402, ID 890).FastAPI looks up ID 402 in SQLite $\rightarrow$ Gets "video_04.mp4 at 12 seconds".FastAPI returns JSON to Flutter.Flutter displays a thumbnail. When clicked, it plays the video starting exactly at 12s.

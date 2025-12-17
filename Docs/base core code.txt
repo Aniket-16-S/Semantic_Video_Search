@@ -1,0 +1,60 @@
+import faiss
+import torch
+import numpy as np
+from transformers import AutoProcessor, AutoModel
+from PIL import Image
+
+class VideoSearchEngine:
+    def __init__(self):
+        # 1. Load SOTA Model (SigLIP)
+        print("Loading SigLIP model...")
+        self.model_name = "google/siglip-so400m-patch14-384"
+        self.processor = AutoProcessor.from_pretrained(self.model_name)
+        self.model = AutoModel.from_pretrained(self.model_name)
+        
+        # 2. Initialize Vector DB (FAISS)
+        # Dimension is 1152 for SigLIP SO400m
+        self.dimension = 1152 
+        self.index = faiss.IndexFlatIP(self.dimension) 
+        self.metadata = [] # List to map ID -> (Video Path, Timestamp)
+
+    def add_video_frames(self, images, video_paths, timestamps):
+        """
+        Process a batch of images and add to FAISS
+        """
+        inputs = self.processor(images=images, return_tensors="pt")
+        
+        with torch.no_grad():
+            # Get image embeddings
+            image_features = self.model.get_image_features(**inputs)
+            
+            # Normalize vectors (Critical for Cosine Similarity!)
+            image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
+            
+            # Convert to numpy for FAISS
+            image_features_np = image_features.cpu().numpy()
+            
+            # Add to Index
+            self.index.add(image_features_np)
+            
+            # Store metadata
+            for path, ts in zip(video_paths, timestamps):
+                self.metadata.append({"path": path, "timestamp": ts})
+
+    def search(self, text_query, top_k=5):
+        inputs = self.processor(text=[text_query], return_tensors="pt")
+        
+        with torch.no_grad():
+            text_features = self.model.get_text_features(**inputs)
+            text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
+            text_features_np = text_features.cpu().numpy()
+            
+            # Search FAISS
+            # D = distances (scores), I = Indices (IDs)
+            D, I = self.index.search(text_features_np, top_k)
+            
+            results = []
+            for idx in I[0]:
+                results.append(self.metadata[idx])
+            
+            return results

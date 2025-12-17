@@ -1,0 +1,9 @@
+Complted basic step 1 Intelligent frame extraction with ffmpeg.
+Takes 30 to 25 sec on CPU - kaby lake architecture - 4 / 32 threads and 
+Takes 16 to 17 sec on T4 GPU @ google collab - 16 threads
+
+- videos = 20, total lenth = 1 hr 11 min - total extractions 1450 frames. => 
+
+# TODO :
+    1. Fix the code with var names and comments.
+    2. check if spped can be improve more

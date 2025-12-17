@@ -1,0 +1,18 @@
+semantic-video-search/
+├── backend/
+│   ├── app.py                # FastAPI entry point
+│   ├── core/
+│   │   ├── search_engine.py  # Handles FAISS and SigLIP logic
+│   │   ├── video_processor.py# Handles FFmpeg logic
+│   │   └── config.py         # Settings (Batch size, Model path)
+│   ├── data/                 # Ignored by git (stores index and DB)
+│   │   ├── index.faiss
+│   │   └── metadata.db
+│   └── requirements.txt      # torch, transformers, faiss-cpu, fastapi, uvicorn
+├── mobile_app/               # Your Flutter Code
+│   ├── lib/
+│   │   ├── services/         # API calls
+│   │   ├── models/           # VideoResult model
+│   │   └── main.dart
+│   └── pubspec.yaml
+└── README.md                 # The most important file!
