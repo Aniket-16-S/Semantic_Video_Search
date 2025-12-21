@@ -14,3 +14,7 @@ Backend,FastAPI,Faster than Flask/Django.
 
 Frontend,Flutter (Desktop/Mobile),
     "Your strength. Allows you to build a beautiful ""Gallery"" UI."
+
+
+1. Clean existing code
+2. Add features 

@@ -4,8 +4,7 @@ import os
 import glob
 from concurrent.futures import ThreadPoolExecutor
 import time
-import platform
-from config import *
+from Backend.Core.config import *
 
 log = logging.getLogger(__name__)
 
@@ -27,55 +26,94 @@ def extract_frames(video_path, output_root, method='fast', use_gpu=True):
             2. method='accurate': Uses Scene Detect (extract frame is scene changed at given probability) 
                                     + Time Interval (if not scene changed in  x secs )
                                     Values at config .py
-
+            
+            3. method = '1fps' : extract every frame at sec.
+                 
         :param use_gpu: weather to use gpu or  not (if available.)
     
         USE '-vf', "fps=1",  to Force 1 frame per second
     """
-    
+    fps_raw = subprocess.check_output([
+                'ffprobe', '-v', '0', '-select_streams', 'v:0', 
+                '-show_entries', 'stream=r_frame_rate', 
+                '-of', 'default=noprint_wrappers=1:nokey=1', 
+                video_path
+                ]).decode('utf-8').strip()
+
+    # output is like -  "30/1" or "24000/1001" so converting to a clean number
+    num, den = map(int, fps_raw.split('/'))
+    fps = round(num / den, 2)
+        
     video_name = os.path.splitext(os.path.basename(video_path))[0]
-    output_dir = os.path.join(output_root, video_name)
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir = output_root
+    
+    if use_gpu :
+        input_args = get_hw_accel_args()
 
     if method == 'fast':     
-        if use_gpu :
-            input_args = get_hw_accel_args()
-        
+       
         command = [
-            ffmpeg_path,
+            FFMPEG,
             *input_args,
+            '-fflags', '+discardcorrupt',
             '-skip_frame', 'nokey',  #  only process key -frames
             '-i', video_path,
             '-vsync', '0',           # '0' or 'passthrough' =  prevent duplicating frames
-            '-frame_pts', '1',
+            '-an',                # disable audio
+            '-sn',                # disable subtitles
+            '-dn',                # disable data streams
             '-q:v', '2',             # Quality (2-31, 2 is best)
-            '-loglevel', 'error',    
-            '-f', 'image2',          # Explicit force image2 muxer
+            '-loglevel', 'error', 
+            '-frame_pts', '1',
 
-            os.path.join(output_dir, 'frame_%d.jpg')
+            os.path.join(output_dir, f"{video_name}_fps={fps}_pts=%08d.jpg")
         ]
    
-    else: # method == 'accurate'
+    elif method == 'accurate' :
         
         filter_expr = "select='isnan(prev_selected_t)+gt(scene,0.4)+gt(t-prev_selected_t,2)'"
         
         command = [
-            ffmpeg_path,
+            FFMPEG,
+            *input_args,
+            '-fflags', '+discardcorrupt',
             '-i', video_path,
             '-vf', filter_expr,
-            '-vsync', 'vfr',
-            '-frame_pts', '1',
+            '-vsync', 'vfr',     # as equivalent as 0 or passthrogh for images ONLY
+            '-an',                # disable audio
+            '-sn',                # disable subtitles
+            '-dn',                # disable data streams
             '-q:v', '2',
             '-loglevel', 'error',
-            os.path.join(output_dir, 'frame_%d.jpg')
+            '-frame_pts', '1',
+            os.path.join(output_dir, f"{video_name}_fps={fps}_pts=%08d.jpg")
         ]
+    
+    elif method == '1fps' :
+
+        command = [
+            FFMPEG,
+            *input_args,
+            '-fflags', '+discardcorrupt',
+            '-i', video_path,
+            '-vsync', '0',
+            '-vf', 'fps=1',       # 1 frame per second
+            '-an',                # disable audio
+            '-sn',                # disable subtitles
+            '-dn',                # disable data streams
+            '-q:v', '2',
+            '-loglevel', 'error',
+            '-frame_pts', '1',
+            os.path.join(output_dir, f"{video_name}_fps={fps}_pts=%08d.jpg")
+        ]
+
 
     try:
         subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return True
     except Exception as e :
         log.error(f"Error {video_name}: {e.stderr.decode()}")
-        return "Error"
+        return str(e)
 
 
 def get_hw_accel_args():
@@ -174,19 +212,19 @@ def get_hw_accel_args():
 def bulk_extract_frames(input_folder, output_folder, use_gpu=True, thread_count=None, del_op_folder=False) -> None :
     
     if not os.path.exists(input_folder):
-        log.error(f"Error: Input folder '{input_folder}' does not exist.")
-        print(f"Error: Input folder '{input_folder}' does not exist.")
+        log.critical(f"Error: Input folder '{input_folder}' does not exist.")
         exit()
+    
     os.makedirs(output_folder, exist_ok=True)
-
     video_files = glob.glob(os.path.join(input_folder, "*.mp4"))
+    
     if thread_count :
         optimal_workers = thread_count
     else :
+        optimal_workers = 8
         # 4 or 8 preffered due to io bottle neck , (system req. to laod files in ram.)
         # 4 / 8 will give Good Performace at Cold Start
-        optimal_workers = min(os.cpu_count() , 8) 
-    
+        
     t2 = time.perf_counter()
     
     with ThreadPoolExecutor(max_workers=optimal_workers) as executor:
@@ -198,21 +236,22 @@ def bulk_extract_frames(input_folder, output_folder, use_gpu=True, thread_count=
     # Force evaluation of the generator to print results and ensure completion
     results_list = list(results)
     
-    log.info(f"Time taken: {t1-t2}, gpu={use_gpu}, at {optimal_workers}")
+    log.info(f"Time taken for extraction : {t1-t2}, gpu={use_gpu}, at {optimal_workers}")
     
     if del_op_folder :
         # For debigging ONLY
         shutil.rmtree(output_folder)
         os.makedirs(output_folder, exist_ok=True)
+        log.warning("Output Folder Cleared !")
 
     for result in results_list :
         if not result is True :
-            print(result)
-
-    return
+            log.error(result)
+            return False
+    
+    return True
 
 if __name__ == "__main__":
     log.info("Testing Frame Extractor")
-    input_folder = "./Backend/input"
-    output_folder = "./Backend/Data_test"
+
     bulk_extract_frames(input_folder=input_folder, output_folder=output_folder)

@@ -20,7 +20,11 @@ Pass a batch of images (Tensor shape: [32, 3, 224, 224]).
 Output: A matrix of vectors (Shape: [32, 768]).
 Normalize the vectors (Crucial for Cosine Similarity).
 
-Step 3: Indexing with FAISSProblem: Comparing your query vector against 10,000 video vectors using a for loop is slow.Solution: FAISS IndexFlatIP.IndexFlatIP = Exact Inner Product (Cosine Similarity).Even with 100 videos (~30,000 frames), this index is instant (< 5ms) on a modern CPU. You don't need complex HNSW graphs for this scale, but using FAISS proves you know the tool
+Step 3: Indexing with FAISS
+Problem: Comparing your query vector against 10,000 video vectors using a for loop is slow.
+Solution: FAISS IndexFlatIP.IndexFlatIP = Exact Inner Product (Cosine Similarity).
+Even with 100 videos (~30,000 frames), this index is instant (< 5ms) on a modern CPU. 
+You don't need complex HNSW graphs for this scale, but using FAISS proves you know the tool.
 
 
 
