@@ -5,7 +5,7 @@
 ![SigLip](https://img.shields.io/badge/Model-Google%20SigLip-green)
 ![FAISS](https://img.shields.io/badge/Vector%20DB-FAISS-yellow)
 
-A high-performance, AI-driven video search engine that allows you to search for specific moments within video libraries using natural language queries. Built with state-of-the-art multimodal embeddings and efficient vector indexing.
+A high-performance, AI-driven video search engine that allows you to search for specific moments within videos using natural language queries. Built with state-of-the-art multimodal embeddings and efficient vector indexing.
 
 ---
 
@@ -29,7 +29,7 @@ A high-performance, AI-driven video search engine that allows you to search for 
 | **Processing Time** | **21 Seconds** ⚡ |
 | **Workflow** | Upload ➔ Frame Extraction ➔ Embedding ➔ Indexing ➔ Ready to Search |
 
-*We are currently optimizing the pipeline further to remove existing bottlenecks and reduce latency even more.*
+*Currently optimizing the pipeline further to remove existing bottlenecks and reduce latency even more.*
 
 ---
 
@@ -53,7 +53,7 @@ A high-performance, AI-driven video search engine that allows you to search for 
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/Semantic_Video_Search.git
+   git clone https://github.com/Aniket-16-S/Semantic_Video_Search.git
    cd Semantic_Video_Search
    ```
 
@@ -87,4 +87,4 @@ python app.py
 
 ---
 
-*Project maintained by [Your Name]. currently open for contributions.*
+*Project maintained by [Aniket-16-S](https://github.com/Aniket-16-S). currently open for contributions.*
