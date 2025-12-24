@@ -9,14 +9,21 @@ import logging
 log = logging.getLogger(__name__)
 
 def search_with_temporal_filter(query_text, k=5, time_threshold=5.0):
-    # 1. Setup Models (Load once in production!)
+    """
+    Perform a search with temporal filtering.
+    
+    Args:
+        query_text (str): The text query to search for.
+        k (int, optional): Number of results to return. Defaults to 5.
+        time_threshold (float, optional): Time threshold for temporal filtering. Defaults to 5.0.
+    """
     device = "cuda" if torch.cuda.is_available() else "cpu"
     tokenizer = SiglipTokenizer.from_pretrained("google/siglip-base-patch16-224")
     model = SiglipTextModel.from_pretrained("google/siglip-base-patch16-224").to(device)
     index = faiss.read_index("vector_storage.index")
     conn = sqlite3.connect("video_search.db")
     
-    # 2. Encode Text with Max Depth
+    
     inputs = tokenizer([query_text], padding="max_length", 
                        max_length=64, return_tensors="pt").to(device)
     
@@ -24,10 +31,8 @@ def search_with_temporal_filter(query_text, k=5, time_threshold=5.0):
         text_vec = model(**inputs).pooler_output
         text_vec = F.normalize(text_vec, p=2, dim=1).cpu().numpy().astype('float32')
 
-    # 3. Search more than K (to allow for filtering)
     distances, indices = index.search(text_vec, k * 10)
     
-    # 4. Filter Results
     filtered_results = []
     seen_videos = {} # video_id -> list of timestamps already picked
 
@@ -53,7 +58,7 @@ def search_with_temporal_filter(query_text, k=5, time_threshold=5.0):
                 "timestamp": t_stamp,
                 "filename": fname
             })
-            # Add to seen
+            
             if vid_id not in seen_videos: seen_videos[vid_id] = []
             seen_videos[vid_id].append(t_stamp)
             
@@ -65,33 +70,6 @@ def search_with_temporal_filter(query_text, k=5, time_threshold=5.0):
 
 
 if __name__ == '__main__' :
-    # import argparse
-    # parser = argparse.ArgumentParser(description="Semantic Video Search Synchronization App")
-    # subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    # # Ingest Command
-    # subparsers.add_parser("ingest", help="Process videos and update index")
-
-    # # Search Command
-    # search_parser = subparsers.add_parser("search", help="Search the video database")
-    # search_parser.add_argument("query", type=str, help="Text query to search for")
-
-    # args = parser.parse_args()
-
-
-    # if args.command == "ingest":
-    #     #run_ingestion()
-    #     print("Running Ingestion")
-    # elif args.command == "search":
-    #     log.info(f"Searching for: '{args.query}'")
-    #     results = search_with_temporal_filter(args.query, k=5)
-        
-    #     print("\n--- Search Results ---")
-    #     for idx, res in enumerate(results):
-    #         print(f"{idx+1}. Time: {res['timestamp']}s | Score: {res['score']:.4f} | File: {res['filename']}")
-    #     print("----------------------\n")
-    # else:
-    #     parser.print_help()
     while True :
         c = input("Search for :")
         if c == 'e' :

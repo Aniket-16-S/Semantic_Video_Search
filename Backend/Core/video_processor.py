@@ -35,14 +35,14 @@ def extract_frames(video_path, output_root, method='fast', use_gpu=True):
     """
     fps_raw = subprocess.check_output([
                 'ffprobe', '-v', '0', '-select_streams', 'v:0', 
-                '-show_entries', 'stream=r_frame_rate', 
+                '-show_entries', 'stream=time_base', 
                 '-of', 'default=noprint_wrappers=1:nokey=1', 
                 video_path
                 ]).decode('utf-8').strip()
 
     # output is like -  "30/1" or "24000/1001" so converting to a clean number
     num, den = map(int, fps_raw.split('/'))
-    fps = round(num / den, 2)
+    fps = num / den
         
     video_name = os.path.splitext(os.path.basename(video_path))[0]
     output_dir = output_root
@@ -56,13 +56,13 @@ def extract_frames(video_path, output_root, method='fast', use_gpu=True):
             FFMPEG,
             *input_args,
             '-fflags', '+discardcorrupt',
-            '-skip_frame', 'nokey',  #  only process key -frames
+            '-skip_frame', 'nokey',       #  only process key -frames
             '-i', video_path,
-            '-vsync', '0',           # '0' or 'passthrough' =  prevent duplicating frames
-            '-an',                # disable audio
-            '-sn',                # disable subtitles
-            '-dn',                # disable data streams
-            '-q:v', '2',             # Quality (2-31, 2 is best)
+            '-vsync', '0',                # '0' or 'passthrough' =  prevent duplicating frames
+            '-an',                        # disable audio
+            '-sn',                        # disable subtitles
+            '-dn',                        # disable data streams
+            '-q:v', '2',                  # Quality (2-31, 2 is best)
             '-loglevel', 'error', 
             '-frame_pts', '1',
 
@@ -79,7 +79,7 @@ def extract_frames(video_path, output_root, method='fast', use_gpu=True):
             '-fflags', '+discardcorrupt',
             '-i', video_path,
             '-vf', filter_expr,
-            '-vsync', 'vfr',     # as equivalent as 0 or passthrogh for images ONLY
+            '-vsync', 'vfr',      # as equivalent as 0 or passthrogh for images ONLY
             '-an',                # disable audio
             '-sn',                # disable subtitles
             '-dn',                # disable data streams
@@ -119,17 +119,7 @@ def extract_frames(video_path, output_root, method='fast', use_gpu=True):
 def get_hw_accel_args():
     """
     Detects the GPU vendor and returns the corresponding FFmpeg hardware 
-    acceleration flags. Returns None if no GPU is detected.
-    
-
-        | GPU Brand | Flag - ffmpeg         |
-        | --------- | --------------------- | 
-        | NVIDIA    | -hwaccel cuda         | 
-        | Intel     | -hwaccel qsv          | 
-        | AMD       | -hwaccel amf          | 
-        | Apple     | -hwaccel videotoolbox | 
-        | Generic   | -hwaccel auto         | 
-        
+    acceleration flags. Returns None if no GPU is detected.        
 
     """
     HW_ACCEL_MAP = {
@@ -209,14 +199,20 @@ def get_hw_accel_args():
     return HW_ACCEL_MAP['auto'] # Return empty if no dedicated hardware >= 2GB found # ffmpeg will decide best or will fallback to CPU mode 
 
 
-def bulk_extract_frames(input_folder, output_folder, use_gpu=True, thread_count=None, del_op_folder=False) -> None :
+def bulk_extract_frames(input_folder=None, output_folder=None, use_gpu=True, thread_count=None, del_op_folder=False, method='fast', video_files_list=None) -> None :
     
-    if not os.path.exists(input_folder):
-        log.critical(f"Error: Input folder '{input_folder}' does not exist.")
-        exit()
+    if video_files_list:
+        video_files = video_files_list
+    elif input_folder:
+        if not os.path.exists(input_folder):
+            log.critical(f"Error: Input folder '{input_folder}' does not exist.")
+            exit()
+        video_files = glob.glob(os.path.join(input_folder, "*.mp4"))
+    else:
+        log.error("No input folder or video list provided")
+        return False
     
     os.makedirs(output_folder, exist_ok=True)
-    video_files = glob.glob(os.path.join(input_folder, "*.mp4"))
     
     if thread_count :
         optimal_workers = thread_count
@@ -229,7 +225,7 @@ def bulk_extract_frames(input_folder, output_folder, use_gpu=True, thread_count=
     
     with ThreadPoolExecutor(max_workers=optimal_workers) as executor:
         
-        results = executor.map(lambda v: extract_frames(v, output_folder, method='fast', use_gpu=use_gpu), video_files)
+        results = executor.map(lambda v: extract_frames(v, output_folder, method=method, use_gpu=use_gpu), video_files)
         
     t1 = time.perf_counter()
     
@@ -253,5 +249,4 @@ def bulk_extract_frames(input_folder, output_folder, use_gpu=True, thread_count=
 
 if __name__ == "__main__":
     log.info("Testing Frame Extractor")
-
-    bulk_extract_frames(input_folder=input_folder, output_folder=output_folder)
+    bulk_extract_frames(input_folder=INPUT_FOLDER, output_folder=DATA_FOLDER)
