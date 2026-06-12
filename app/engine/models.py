@@ -1,10 +1,28 @@
 """
 app/engine/models.py
 ====================
-Thread-safe singleton SigLIP inference engine with automatic split-model support.
+Thread-safe singleton SigLIP inference engine with automatic split-model support
+and dual-tier quality selection.
 
-Architecture — two modes
--------------------------
+Model Tier Selection
+--------------------
+Set SIGLIP_TIER in .env to switch between two quality modes:
+
+  SIGLIP_TIER=base  (default)
+    Model  : google/siglip-base-patch16-224
+    Dir    : models/siglip_int8/
+    Size   : ~26 MB per encoder (split mode)
+    Speed  : Fast — ideal for real-time frame indexing
+
+  SIGLIP_TIER=hq
+    Model  : google/siglip-so400m-patch14-224
+    Dir    : assets/models/
+    Size   : ≤ 300 MB (vision encoder, INT8)
+    Speed  : Slower — use for nightly/background indexing jobs
+    Generate: python tools/quantize_siglip.py --tier hq
+
+Architecture — two loading modes
+---------------------------------
 SPLIT MODE  (preferred — run tools/export_split_models.py once to enable)
     vision_encoder_int8.onnx  ~26 MB  ← used only during frame upload
     text_encoder_int8.onnx    ~26 MB  ← used only during text search
@@ -96,11 +114,21 @@ class SigLipEngine:
     # Internal: model loading
     # ------------------------------------------------------------------
     def _load_model(self) -> None:
-        vision_path   = os.path.join(settings.ONNX_MODEL_DIR, settings.ONNX_VISION_MODEL_FILE)
-        text_path     = os.path.join(settings.ONNX_MODEL_DIR, settings.ONNX_TEXT_MODEL_FILE)
-        combined_path = os.path.join(settings.ONNX_MODEL_DIR, settings.ONNX_MODEL_FILE)
+        # ── Resolve paths from active tier (base | hq) ──────────────────────
+        # settings.ACTIVE_ONNX_DIR and settings.ACTIVE_VISION_FILE are @property
+        # accessors that resolve to the correct directory and filename based on
+        # the SIGLIP_TIER env var.  No other code needs to change when switching.
+        active_dir    = settings.ACTIVE_ONNX_DIR
+        active_vision = settings.ACTIVE_VISION_FILE
 
+        vision_path   = os.path.join(active_dir, active_vision)
+        text_path     = os.path.join(active_dir, settings.ONNX_TEXT_MODEL_FILE)
+        combined_path = os.path.join(active_dir, settings.ONNX_MODEL_FILE)
+
+        tier = settings.SIGLIP_TIER.upper()
         flag = settings.USE_SPLIT_MODELS   # True | False | None
+
+        print(f"[SigLipEngine] Active tier: {tier} | dir: {active_dir}")
 
         if flag is True:
             # ── FORCED SPLIT ─────────────────────────────────────────────
@@ -110,7 +138,8 @@ class SigLipEngine:
                     raise FileNotFoundError(
                         f"USE_SPLIT_MODELS=true but {label} encoder not found:\n"
                         f"  {path}\n"
-                        f"Run 'python tools/export_split_models.py' to generate it."
+                        f"  For tier=base: run 'python tools/export_split_models.py'\n"
+                        f"  For tier=hq:   run 'python tools/quantize_siglip.py --tier hq'"
                     )
             print("[SigLipEngine] USE_SPLIT_MODELS=true → loading split encoders.")
             self._load_split(vision_path, text_path)
@@ -129,12 +158,15 @@ class SigLipEngine:
                 print(
                     f"[SigLipEngine] Split models not found (auto) → combined model.\n"
                     f"  Missing: {vision_path if not os.path.exists(vision_path) else text_path}\n"
-                    f"  Run 'python tools/export_split_models.py' to enable split mode.\n"
+                    f"  For tier=base: run 'python tools/export_split_models.py'\n"
+                    f"  For tier=hq:   run 'python tools/quantize_siglip.py --tier hq'\n"
                     f"  Or set USE_SPLIT_MODELS=false in .env to silence this message."
                 )
                 self._load_combined(combined_path)
 
-        # Processor is shared — same tokeniser / image processor for both modes
+        # Processor is shared — same tokeniser / image processor for both modes.
+        # MODEL_NAME is a @property that returns the correct HuggingFace ID for
+        # the active tier (base or hq).
         self.processor = SiglipProcessor.from_pretrained(settings.MODEL_NAME)
         self.device = settings.DEVICE
 

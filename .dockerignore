@@ -1,22 +1,23 @@
-# .dockerignore
 # ==============================================================================
-# Optimizes Docker build contexts and minimizes runtime image sizes.
-# Model cache and temporary upload directories are omitted.
+# .dockerignore — Semantic Video Search Engine
+# ==============================================================================
+# Docker builds the Python FastAPI backend only.
+# Flutter/Dart, native FFmpeg static libraries, and dev tooling are excluded —
+# the container installs system ffmpeg via apt-get instead.
 # ==============================================================================
 
-# ── Version Control ──────────────────────────────────────────────────────────
+# ── Version Control ───────────────────────────────────────────────────────────
 .git
 .gitignore
 .github
 
-# ── Development Clutter & IDEs ────────────────────────────────────────────────
+# ── IDEs & Development Clutter ───────────────────────────────────────────────
 .vs
 .vscode
 .idea
 *.suo
 *.user
 *.sln
-*.jsonl
 
 # ── Python Cache & Virtual Environments ──────────────────────────────────────
 __pycache__/
@@ -28,28 +29,59 @@ __pycache__/
 venv/
 env/
 .env
+.env.*
+pip-wheel-metadata/
+*.egg-info/
 
-# ── Jupyter Notebooks & Tests ────────────────────────────────────────────────
+# ── Jupyter & Debug Scripts ───────────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb
-Cloud_test.ipynb
 debug_siglip.py
 verify_setup.py
+check_qdrant.py
+test_qdrant_data.py
+test_open.py
+test_inference.py
+project_state_summary.md
 
-# ── Temporary & Runtime Workspace Folders ────────────────────────────────────
+# ── Dart / Flutter (not used inside Docker) ───────────────────────────────────
+media_core_ffi/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# ── FFmpeg Static Libs & Source Tree (Docker uses apt-get ffmpeg instead) ─────
+# These are large binary trees only needed for the Dart/Flutter native build.
+native/
+ffmpeg-6.1.1/
+ffmpeg-6.1.1.tar.bz2
+
+# ── Large Model Assets (excluded — mount as volumes or build separately) ──────
+models/
+raw_models/
+assets/models/
+
+# ── Temporary & Runtime Folders ───────────────────────────────────────────────
 temp_uploads/
 scratch/
 qdrant_local_db/
-*.log
+openvino_cache/
 
-# ── Large Raw Models (Exclude raw models; keep runtime quantized INT8 models) ──
-models/siglip_int8/model.onnx
-models/siglip_int8/text_encoder.onnx
-models/siglip_int8/text_encoder.onnx.data
-models/siglip_int8/vision_encoder.onnx
-models/siglip_int8/vision_encoder.onnx.data
-# DO NOT ignore the following:
-# !models/siglip_int8/model_quantized.onnx
-# !models/siglip_int8/vision_encoder_int8.onnx
-# !models/siglip_int8/text_encoder_int8.onnx
-# !models/siglip_int8/config.json
+# ── PaddleOCR Archives ────────────────────────────────────────────────────────
+*.tar
+en_PP-OCRv4_det_infer/
+en_PP-OCRv4_rec_infer/
+*.pdmodel
+*.pdiparams
+*.pdiparams.info
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+*.log.*
+logs/
+
+# ── OS Artifacts ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini

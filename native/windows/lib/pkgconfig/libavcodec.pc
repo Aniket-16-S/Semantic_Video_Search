@@ -1,0 +1,14 @@
+prefix=/d/a/temp/temp/native/windows/x64
+exec_prefix=${prefix}
+libdir=/d/a/temp/temp/native/windows/x64/lib
+includedir=/d/a/temp/temp/native/windows/x64/include
+
+Name: libavcodec
+Description: FFmpeg codec library
+Version: 60.31.102
+Requires: libswresample >= 4.12.100, libavutil >= 58.29.100
+Requires.private: 
+Conflicts:
+Libs: -L${libdir}  -lavcodec -liconv -lm -latomic -lole32 -luser32
+Libs.private: 
+Cflags: -I${includedir}

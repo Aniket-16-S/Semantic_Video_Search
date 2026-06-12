@@ -1,46 +1,83 @@
-# ── Web framework ────────────────────────────────────────────────────────────
-fastapi
-uvicorn[standard]
+# ==============================================================================
+# requirements.txt — Semantic Video Search Engine
+#
+# Dependency groups:
+#   [A] Runtime — always required to run the FastAPI API server
+#   [B] Inference-only — required at inference time (ONNX, OpenVINO)
+#   [C] Export/Quantization — run once via tools/ scripts, NOT needed at runtime
+#
+# For a minimal production image, install only groups A + B.
+# For local development / model preparation, install A + B + C.
+# ==============================================================================
 
-# ── Vector database client ───────────────────────────────────────────────────
+
+# ══════════════════════════════════════════════════════════════════════════════
+# [A] RUNTIME — FastAPI server + core utilities
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Web framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+
+# File upload & settings
+python-multipart>=0.0.9
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+
+# HTTP client (CLI utility / health checks)
+requests>=2.31.0
+
+# Vector database client
 qdrant-client>=1.9.0
 
-# ── ONNX Runtime (INT8 inference) ────────────────────────────────────────────
-# CPU-only runtime – lightweight, works on Android, Windows, ARM, x86.
+# Image processing
+pillow>=10.0.0
+numpy>=1.26.0
+
+# PyAV — Python bindings for FFmpeg libav* (used for PTS/timestamp mapping)
+# Does NOT replace the compiled FFmpeg binary in native/; it demuxes for timing only.
+av>=12.0.0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# [B] INFERENCE — ONNX Runtime + optional OpenVINO acceleration
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ONNX Runtime (CPU-only, works on x86/ARM/Android)
 # Switch to onnxruntime-gpu if a CUDA device is available.
-# Switch to onnxruntime-openvino for Intel iGPU acceleration (Item 5).
 onnxruntime>=1.17.0
 
-# ── OpenVINO (Intel iGPU / CPU acceleration) ─────────────────────────────────
-# Uncomment the lines below to enable Item 4 & 5 (OpenVINO provider).
-# Requires the Intel OpenVINO runtime to be installed on the host.
-# See: https://docs.openvino.ai/latest/openvino_docs_install_guides.html
-#
+# OpenVINO backend — enables Intel iGPU / NPU acceleration.
+# Comment out both lines below to fall back to plain CPU ONNX Runtime.
 openvino>=2024.0
-onnxruntime-openvino>=1.17.0   # replaces onnxruntime above when using OpenVINO
+onnxruntime-openvino>=1.17.0   # replaces onnxruntime above when OpenVINO is active
 
-# ── ML / Processors ──────────────────────────────────────────────────────────
-# transformers is needed for SiglipProcessor (tokeniser + image processor).
-# torch is only required during the one-time quantize_model.py export step;
-# it is NOT needed at inference time (ONNX Runtime handles everything).
+# HuggingFace Transformers — SigLIP tokeniser + image processor
+# NOT used for inference itself; only for SiglipProcessor (pre/post-processing).
 transformers>=4.38.0
-pillow
-numpy
 
-# ── ONNX export + INT8 quantization (run once via tools/quantize_model.py) ───
-# Only required for model export/quantization, not for inference.
-# Install separately when preparing the model:
-#   pip install optimum[onnxruntime] torch
-optimum[onnxruntime]
-torch            # needed only for initial ONNX export; remove for inference-only deploys
 
-# ── Scene detection (now handled by FFmpeg 'select' filter) ──────────────────
-# scenedetect[opencv] is NO LONGER NEEDED — removed to reduce dependency footprint.
-# FFmpeg's built-in select='gt(scene,X)' filter does the same job in a single
-# decode pass, eliminating the previous double-decode bottleneck.
+# ══════════════════════════════════════════════════════════════════════════════
+# [C] EXPORT / QUANTIZATION — run once via tools/ scripts
+#     NOT required to run the API.  Install separately when preparing models:
+#
+#     pip install -r requirements.txt          # installs everything
+#   or for inference-only deploys:
+#     pip install fastapi uvicorn[standard] qdrant-client>=1.9.0 \
+#                 onnxruntime>=1.17.0 transformers>=4.38.0 \
+#                 pillow numpy av python-multipart pydantic-settings python-dotenv
+# ══════════════════════════════════════════════════════════════════════════════
 
-# ── Utilities ────────────────────────────────────────────────────────────────
-python-multipart       # FastAPI file uploads
-pydantic-settings      # settings management
-requests               # CLI client HTTP calls
-av>=12.0.0             # PyAV: Python bindings for FFmpeg libav* (demux-only PTS map, no subprocess)
+# SigLIP SO400M ONNX export + INT8 quantization (tools/quantize_siglip.py)
+optimum[onnxruntime]>=1.17.0
+torch                           # only for initial FP32 ONNX export; safe to remove after
+
+# Whisper Tiny ONNX export (tools/export_whisper.py)
+# Already covered by optimum[onnxruntime] above.
+
+# PaddleOCR INT8 quantization (tools/quantize_ocr.py) — Linux/WSL only:
+#   Requires pre-conversion from PaddlePaddle → ONNX format.
+#   See the header of tools/quantize_ocr.py for the full workflow.
+#
+# paddlepaddle                   # uncomment when running quantize_ocr.py
+# paddle2onnx>=1.2.0             # uncomment when running quantize_ocr.py

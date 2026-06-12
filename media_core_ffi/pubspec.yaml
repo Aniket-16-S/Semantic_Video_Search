@@ -1,0 +1,58 @@
+name: media_core_ffi
+description: >
+  Flutter Native Asset plugin — wraps a statically-compiled FFmpeg
+  audio demux + VAD engine (media_core.c) into a platform-native
+  shared library callable from Dart via dart:ffi.
+
+  Supports Android (ARM64 via NDK) and Windows (x64 via MSVC/MinGW).
+
+version: 0.1.0
+publish_to: none   # local plugin — not published to pub.dev
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+# ── Native Assets declaration ─────────────────────────────────────────────
+# This package uses Flutter Native Assets (build.dart) — NOT the older
+# ffiPlugin / CMakeLists.txt system.  Do NOT add a flutter.plugin section here;
+# that would tell Flutter to look for cmake build files which don't exist.
+#
+# Flutter automatically discovers build.dart and invokes it during
+# `flutter build` and `flutter run` for any platform declared in build.dart.
+#
+# Requires Flutter >= 3.22 (Native Assets no longer experimental).
+
+# ── Dart dependencies ──────────────────────────────────────────────────────
+dependencies:
+  flutter:
+    sdk: flutter
+  ffi: ^2.1.0   # toNativeUtf8(), calloc.free() used in lib/media_core_ffi.dart
+
+dev_dependencies:
+  ffigen: ^11.0.0          # generates lib/src/media_core_bindings.dart from media_core.h
+  native_assets_cli: any   # required by build.dart (imported as package:native_assets_cli)
+
+# ── ffigen configuration (run: dart run ffigen --config pubspec.yaml) ──────
+ffigen:
+  name: MediaCoreBindings
+  description: "Auto-generated FFI bindings for media_core.h"
+  output: "lib/src/media_core_bindings.dart"
+  headers:
+    entry-points:
+      - "src/media_core.h"
+  compiler-opts:
+    # -Isrc is always needed; do NOT hardcode machine-specific LLVM/clang paths here.
+    # If ffigen cannot find stdint.h, set the CPATH environment variable:
+    #   Windows (MSYS2): export CPATH=/mingw64/lib/clang/$(clang --version | grep -oP '\d+' | head -1)/include
+    #   macOS (Xcode)  : xcode-select --install
+    - "-Isrc"
+  functions:
+    include:
+      - "extract_audio_pcm"
+      - "free_audio_buffer"
+      - "vad_rms"
+      - "vad_is_speech"
+  structs:
+    include:
+      - "AudioBufferResult"

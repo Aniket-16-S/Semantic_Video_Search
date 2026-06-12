@@ -1,4 +1,12 @@
-# Python
+# ==============================================================================
+# .gitignore — Semantic Video Search Engine
+# ==============================================================================
+# NOTE: Compiled FFmpeg static libraries in native/ and ffmpeg-6.1.1/ are
+#       intentionally version-controlled (not ignored).  They are hard to
+#       reproduce cross-platform (NDK + MSYS2 toolchains) so we commit them.
+# ==============================================================================
+
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -11,7 +19,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# NOTE: do NOT add a bare "lib/" rule — it would match native/windows/lib/
+#       and Dart package paths. Only exclude Python-virtualenv lib copies:
 lib64/
 parts/
 sdist/
@@ -20,6 +29,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+pip-wheel-metadata/
 
 # Virtual Environment
 venv/
@@ -32,24 +42,72 @@ ENV/
 *.swp
 *.swo
 .vs/
+*.suo
+*.user
 
-# Project Specific
+# ── OS Artifacts ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Environment & Secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Project Runtime Artifacts ─────────────────────────────────────────────────
 temp_uploads/
-models/
 video_search.db
 vector_storage.index
-.env
+qdrant_local_db/
+openvino_cache/
 
-# Debug/Test Scripts
+# ── Large / Generated AI Model Assets ────────────────────────────────────────
+# Quantized ONNX models (regenerate via tools/quantize_siglip.py etc.)
+models/
+# Intermediate FP32 ONNX files produced during quantization
+raw_models/
+
+# ── Dart / Flutter ────────────────────────────────────────────────────────────
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.dart_tool/
+# Native Assets build output — compiled .dll / .so / .dylib placed here
+# by `flutter build` / build.dart. Regenerate with: dart run build.dart
+media_core_ffi/build/
+# Dart package cache snapshots
+.pub-cache/
+.pub/
+pubspec.lock        # uncomment to track lock file (recommended for apps)
+
+# ── PaddleOCR source archives & intermediate models ───────────────────────────
+*.tar
+en_PP-OCRv4_det_infer/
+en_PP-OCRv4_rec_infer/
+*.pdmodel
+*.pdiparams
+*.pdiparams.info
+
+# ── ONNX intermediate & SigLIP split assets ──────────────────────────────────
+assets/models/*.onnx
+assets/models/whisper_tiny_int8/
+
+# ── Debug / One-off Test Scripts (not part of the package) ───────────────────
 check_qdrant.py
 debug_siglip.py
 verify_setup.py
 Cloud_test.ipynb
-
-# OS
-.DS_Store
-Thumbs.db
-project_state_summary.md
 test_qdrant_data.py
 test_open.py
 test_inference.py
+project_state_summary.md
+scratch/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+*.log.*
+logs/
