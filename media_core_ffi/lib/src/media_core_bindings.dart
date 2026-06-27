@@ -166,6 +166,237 @@ final class AudioBufferResult extends ffi.Struct {
   external int sample_count;
 }
 
+final class VideoFrame extends ffi.Struct {
+  external ffi.Pointer<ffi.Float> data;
+
+  @ffi.Double()
+  external double timestamp_s;
+}
+
+final class VideoExtractionResult extends ffi.Struct {
+  external ffi.Pointer<VideoFrame> frames;
+
+  @ffi.Int()
+  external int frame_count;
+}
+
+extension MediaCoreVideoExtension on MediaCoreBindings {
+  VideoExtractionResult extract_video_frames(
+    ffi.Pointer<ffi.Char> video_path,
+    double scene_threshold,
+  ) {
+    return _extract_video_frames(
+      video_path,
+      scene_threshold,
+    );
+  }
+
+  VideoExtractionResult Function(ffi.Pointer<ffi.Char>, double) get _extract_video_frames {
+    late final _extract_video_framesPtr = _lookup<
+        ffi.NativeFunction<
+            VideoExtractionResult Function(
+                ffi.Pointer<ffi.Char>, ffi.Double)>>('extract_video_frames');
+    return _extract_video_framesPtr
+        .asFunction<VideoExtractionResult Function(ffi.Pointer<ffi.Char>, double)>();
+  }
+
+  void free_video_frames(
+    VideoExtractionResult result,
+  ) {
+    return _free_video_frames(
+      result,
+    );
+  }
+
+  void Function(VideoExtractionResult) get _free_video_frames {
+    late final _free_video_framesPtr = _lookup<
+            ffi.NativeFunction<ffi.Void Function(VideoExtractionResult)>>(
+        'free_video_frames');
+    return _free_video_framesPtr.asFunction<void Function(VideoExtractionResult)>();
+  }
+}
+
+final class WhisperMelResult extends ffi.Struct {
+  external ffi.Pointer<ffi.Float> data;
+
+  @ffi.Int()
+  external int size;
+}
+
+extension MediaCoreWhisperExtension on MediaCoreBindings {
+  WhisperMelResult whisper_compute_mel(
+    ffi.Pointer<ffi.Int16> pcm_data,
+    int sample_count,
+  ) {
+    return _whisper_compute_mel(
+      pcm_data,
+      sample_count,
+    );
+  }
+
+  WhisperMelResult Function(ffi.Pointer<ffi.Int16>, int) get _whisper_compute_mel {
+    late final _whisper_compute_melPtr = _lookup<
+        ffi.NativeFunction<
+            WhisperMelResult Function(
+                ffi.Pointer<ffi.Int16>, ffi.Int)>>('whisper_compute_mel');
+    return _whisper_compute_melPtr
+        .asFunction<WhisperMelResult Function(ffi.Pointer<ffi.Int16>, int)>();
+  }
+
+  void free_whisper_mel(
+    WhisperMelResult result,
+  ) {
+    return _free_whisper_mel(
+      result,
+    );
+  }
+
+  void Function(WhisperMelResult) get _free_whisper_mel {
+    late final _free_whisper_melPtr = _lookup<
+            ffi.NativeFunction<ffi.Void Function(WhisperMelResult)>>(
+        'free_whisper_mel');
+    return _free_whisper_melPtr.asFunction<void Function(WhisperMelResult)>();
+  }
+
+  ffi.Pointer<ffi.Char> whisper_decode_tokens(
+    ffi.Pointer<ffi.Int> tokens,
+    int token_count,
+    ffi.Pointer<ffi.Char> tokenizer_json_path,
+  ) {
+    return _whisper_decode_tokens(
+      tokens,
+      token_count,
+      tokenizer_json_path,
+    );
+  }
+
+  ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Int>, int, ffi.Pointer<ffi.Char>) get _whisper_decode_tokens {
+    late final _whisper_decode_tokensPtr = _lookup<
+        ffi.NativeFunction<
+            ffi.Pointer<ffi.Char> Function(
+                ffi.Pointer<ffi.Int>, ffi.Int, ffi.Pointer<ffi.Char>)>>('whisper_decode_tokens');
+    return _whisper_decode_tokensPtr
+        .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Int>, int, ffi.Pointer<ffi.Char>)>();
+  }
+
+  void free_string(
+    ffi.Pointer<ffi.Char> str,
+  ) {
+    return _free_string(
+      str,
+    );
+  }
+
+  void Function(ffi.Pointer<ffi.Char>) get _free_string {
+    late final _free_stringPtr = _lookup<
+            ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Char>)>>(
+        'free_string');
+    return _free_stringPtr.asFunction<void Function(ffi.Pointer<ffi.Char>)>();
+  }
+}
+
+final class OcrBoundingBox extends ffi.Struct {
+  @ffi.Array.multi([8])
+  external ffi.Array<ffi.Float> pts;
+}
+
+final class OcrBoxResult extends ffi.Struct {
+  external ffi.Pointer<OcrBoundingBox> boxes;
+
+  @ffi.Int()
+  external int box_count;
+}
+
+final class OcrCropResult extends ffi.Struct {
+  external ffi.Pointer<ffi.Float> data;
+
+  @ffi.Int()
+  external int width;
+
+  @ffi.Int()
+  external int height;
+}
+
+extension MediaCoreOcrExtension on MediaCoreBindings {
+  OcrBoxResult ocr_extract_bboxes(
+    ffi.Pointer<ffi.Float> heatmap,
+    int width,
+    int height,
+    double threshold,
+  ) {
+    return _ocr_extract_bboxes(
+      heatmap,
+      width,
+      height,
+      threshold,
+    );
+  }
+
+  OcrBoxResult Function(ffi.Pointer<ffi.Float>, int, int, double) get _ocr_extract_bboxes {
+    late final _ocr_extract_bboxesPtr = _lookup<
+        ffi.NativeFunction<
+            OcrBoxResult Function(
+                ffi.Pointer<ffi.Float>, ffi.Int, ffi.Int, ffi.Float)>>('ocr_extract_bboxes');
+    return _ocr_extract_bboxesPtr
+        .asFunction<OcrBoxResult Function(ffi.Pointer<ffi.Float>, int, int, double)>();
+  }
+
+  void free_ocr_boxes(
+    OcrBoxResult result,
+  ) {
+    return _free_ocr_boxes(
+      result,
+    );
+  }
+
+  void Function(OcrBoxResult) get _free_ocr_boxes {
+    late final _free_ocr_boxesPtr = _lookup<
+            ffi.NativeFunction<ffi.Void Function(OcrBoxResult)>>(
+        'free_ocr_boxes');
+    return _free_ocr_boxesPtr.asFunction<void Function(OcrBoxResult)>();
+  }
+
+  OcrCropResult ocr_crop_and_warp(
+    ffi.Pointer<ffi.Float> image_chw,
+    int img_w,
+    int img_h,
+    OcrBoundingBox box,
+    int target_height,
+  ) {
+    return _ocr_crop_and_warp(
+      image_chw,
+      img_w,
+      img_h,
+      box,
+      target_height,
+    );
+  }
+
+  OcrCropResult Function(ffi.Pointer<ffi.Float>, int, int, OcrBoundingBox, int) get _ocr_crop_and_warp {
+    late final _ocr_crop_and_warpPtr = _lookup<
+        ffi.NativeFunction<
+            OcrCropResult Function(
+                ffi.Pointer<ffi.Float>, ffi.Int, ffi.Int, OcrBoundingBox, ffi.Int)>>('ocr_crop_and_warp');
+    return _ocr_crop_and_warpPtr
+        .asFunction<OcrCropResult Function(ffi.Pointer<ffi.Float>, int, int, OcrBoundingBox, int)>();
+  }
+
+  void free_ocr_crop(
+    OcrCropResult result,
+  ) {
+    return _free_ocr_crop(
+      result,
+    );
+  }
+
+  void Function(OcrCropResult) get _free_ocr_crop {
+    late final _free_ocr_cropPtr = _lookup<
+            ffi.NativeFunction<ffi.Void Function(OcrCropResult)>>(
+        'free_ocr_crop');
+    return _free_ocr_cropPtr.asFunction<void Function(OcrCropResult)>();
+  }
+}
+
 const int INT64_MAX = 9223372036854775807;
 
 const int INT64_MIN = -9223372036854775808;

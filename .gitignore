@@ -9,7 +9,25 @@
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
-*$py.class
+*.py.class
+
+# ── C/C++ / FFmpeg Build Outputs & Compiler Artifacts ─────────────────────────
+ffmpeg-android-arm64/
+ffmpeg-windows-x64/
+*.o
+*.obj
+*.d
+# Ignore static/shared library artifacts globally, except under native/
+*.a
+*.lib
+*.dll
+*.dylib
+!native/**/*.a
+!native/**/*.lib
+!native/**/*.dll
+!native/**/*.so
+!native/**/*.dylib
+
 *.so
 .Python
 env/
@@ -98,6 +116,7 @@ check_qdrant.py
 debug_siglip.py
 verify_setup.py
 Cloud_test.ipynb
+re_quantize.py
 test_qdrant_data.py
 test_open.py
 test_inference.py

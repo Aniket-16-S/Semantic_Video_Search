@@ -183,6 +183,7 @@ def quantize_to_int8(fp32_path: str, int8_path: str, budget_mb: float) -> None:
         model_input=fp32_path,
         model_output=int8_path,
         weight_type=QuantType.QUInt8,       # asymmetric — per spec
+        op_types_to_quantize=['MatMul', 'Attention', 'Gather', 'EmbedLayerNormalization'],
         extra_options={
             "MatMulConstBOnly": True,       # quantize weights only, not activations
         },

@@ -74,8 +74,112 @@ typedef struct {
     int      sample_count;
 } AudioBufferResult;
 
+/**
+ * VideoFrame
+ * ----------
+ * Represents a single normalized CHW Float32 frame (384x384).
+ */
+typedef struct {
+    float*   data;         // [3 * 384 * 384] floats
+    double   timestamp_s;  // pts_time
+} VideoFrame;
+
+/**
+ * VideoExtractionResult
+ * ---------------------
+ * A batch of extracted keyframes ready for SigLIP / OCR ONNX sessions.
+ */
+typedef struct {
+    VideoFrame* frames;
+    int         frame_count;
+} VideoExtractionResult;
+
+/**
+ * WhisperMelResult
+ * ----------------
+ * Holds the computed 80-bin Mel-spectrogram for Whisper ONNX encoder.
+ */
+typedef struct {
+    float* data;
+    int    size;
+} WhisperMelResult;
+
+/**
+ * OcrBoundingBox
+ * --------------
+ * Represents the 4 corners of a detected text line:
+ * [tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y]
+ */
+typedef struct {
+    float pts[8];
+} OcrBoundingBox;
+
+typedef struct {
+    OcrBoundingBox* boxes;
+    int box_count;
+} OcrBoxResult;
+
+/**
+ * OcrCropResult
+ * -------------
+ * Represents a dynamically-sized, perspective-warped text line.
+ * CHW Float32 tensor mapped to [-1.0, 1.0].
+ */
+typedef struct {
+    float* data;
+    int    width;
+    int    height; // Usually 48 for SVTR models
+} OcrCropResult;
 
 /* ── Core API ─────────────────────────────────────────────────────────────── */
+
+/**
+ * ocr_extract_bboxes
+ * ------------------
+ * Extracts bounding boxes natively from the DBNet Float32 heatmap output.
+ */
+MEDIA_CORE_API OcrBoxResult ocr_extract_bboxes(const float* heatmap, int width, int height, float threshold);
+
+MEDIA_CORE_API void free_ocr_boxes(OcrBoxResult result);
+
+/**
+ * ocr_crop_and_warp
+ * -----------------
+ * Native C++ bilinear interpolation engine to warp the 4-point bounding box
+ * out of the original RGB image into a flat, fixed-height tensor.
+ */
+MEDIA_CORE_API OcrCropResult ocr_crop_and_warp(const uint8_t* image_rgb, int img_w, int img_h, OcrBoundingBox box, int target_height);
+
+MEDIA_CORE_API void free_ocr_crop(OcrCropResult result);
+
+/**
+ * whisper_compute_mel
+ * -------------------
+ * Computes the 80-bin Mel-spectrogram from 16kHz PCM audio.
+ * Uses pocketfft for STFT.
+ */
+MEDIA_CORE_API WhisperMelResult whisper_compute_mel(const int16_t* pcm_data, int sample_count);
+
+MEDIA_CORE_API void free_whisper_mel(WhisperMelResult result);
+
+/**
+ * whisper_decode_tokens
+ * ---------------------
+ * Maps an array of BPE token IDs to a UTF-8 string using tokenizer.json.
+ */
+MEDIA_CORE_API char* whisper_decode_tokens(const int* tokens, int token_count, const char* tokenizer_json_path);
+
+MEDIA_CORE_API void free_string(char* str);
+
+/**
+ * extract_video_frames
+ * --------------------
+ * Extracts scene-changed keyframes natively using FFmpeg and SAD pixel-diffing.
+ * Normalizes RGB24 to Float32 CHW inside C++ to skip Dart processing.
+ */
+MEDIA_CORE_API VideoExtractionResult extract_video_frames(const char* video_path, double scene_threshold);
+
+MEDIA_CORE_API void free_video_frames(VideoExtractionResult result);
 
 /**
  * extract_audio_pcm

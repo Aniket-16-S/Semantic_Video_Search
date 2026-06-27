@@ -44,34 +44,80 @@ Designed for low resource environments, the entire pipeline runs efficiently on 
 # System Architecture
 
 ```mermaid
-graph TD
-    Client[Client / User] -->|1. Upload Video| API[FastAPI Backend]
-    API -->|2. Delegate Task| BG[Async Background Worker]
+flowchart TB
+    %% Styling
+    classDef client fill:#e1f5fe,stroke:#039be5,stroke-width:2px,color:#01579b;
+    classDef api fill:#efebe9,stroke:#8d6e63,stroke-width:2px,color:#3e2723;
+    classDef ingestion fill:#e8f5e9,stroke:#4caf50,stroke-width:2px,color:#1b5e20;
+    classDef search fill:#fff3e0,stroke:#ff9800,stroke-width:2px,color:#e65100;
+    classDef audio fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px,color:#4a148c;
+    classDef db fill:#eceff1,stroke:#607d8b,stroke-width:2px,color:#263238;
 
-    subgraph IP["Ingestion Pipeline (Producer-Consumer Queue)"]
-        BG -->|Spawn| Prod[VideoFrameProducer Thread]
-        Prod -->|Stream & Decode| Decode[FFmpeg Single-Pass Decoder]
-        Decode -->|Raw RGB Frames| Queue[Bounded Frame Buffer Queue]
-        Queue -->|Batch Fetch| Cons[InferenceConsumer Thread]
-        Cons -->|3. ONNX Vision Inference| Models[SigLIP Vision Engine]
+    %% Client App
+    Client[Client / App UI]:::client
+
+    %% Backend Services Subgraph
+    subgraph Backend["FastAPI Backend (Search & Ingestion Server)"]
+        API[FastAPI Router]:::api
+        BG[Background Worker]:::api
+        API -->|Delegate Ingestion| BG
     end
 
-    Models -->|4. Generate Embeddings| Embeds[L2-Normalized Vectors]
-    Embeds -->|5. Upsert| QdrantService[Qdrant Ingestion Service]
-    QdrantService -->|6. Storage with INT8 Quantization| Qdrant[(Qdrant DB)]
+    %% Ingestion Pipeline
+    subgraph Ingestion["Video Ingestion Pipeline (Producer-Consumer)"]
+        Prod[VideoFrameProducer Thread]:::ingestion
+        Decode[FFmpeg Smart Decoder]:::ingestion
+        Queue[Bounded Buffer Queue]:::ingestion
+        Cons[InferenceConsumer Thread]:::ingestion
+        VisionEngine[SigLIP Vision Engine ONNX]:::ingestion
 
-    Client -->|7. Search Query| API
-    API -->|8. ONNX Text Inference| TextEngine[SigLIP Text Engine]
-    TextEngine -->|9. Dense Vector Search < 100ms| Qdrant
-    Qdrant -->|10. Return Ranked Timestamps| API
-    API -->|11. JSON Results| Client
-
-    subgraph OnDevice["On-Device Audio Pipeline (media_core_ffi)"]
-        FFI[Dart FFI Layer] -->|Calls| NativeLib[media_core.c]
-        NativeLib -->|Statically linked| FFmpegLibs[FFmpeg libav* Static Libs]
-        FFmpegLibs -->|Demux + PCM decode| Audio[Raw Audio PCM]
-        Audio -->|VAD filter| VAD[Voice Activity Detection]
+        BG -->|Spawn| Prod
+        Prod -->|Scene-Change Filter| Decode
+        Decode -->|Raw RGB Frames| Queue
+        Queue -->|Batch Fetch| Cons
+        Cons -->|Run Inference| VisionEngine
     end
+
+    %% Search Pipeline
+    subgraph SearchFlow["Semantic Search Engine"]
+        TextEngine[SigLIP Text Engine ONNX]:::search
+    end
+
+    %% Vector Database
+    subgraph VectorStore["Vector Database & Storage"]
+        Qdrant[(Qdrant DB)]:::db
+        QdrantService[Qdrant Ingestion Service]:::db
+        QdrantService -->|INT8 Quantized MMAP| Qdrant
+    end
+
+    %% On-Device Audio Pipeline
+    subgraph AudioPipeline["On-Device Audio & Transcription (media_core_ffi)"]
+        FFI[Dart FFI Binding]:::audio
+        NativeLib[media_core.c]:::audio
+        FFmpegLibs[FFmpeg Static Libs]:::audio
+        VAD[Voice Activity Detection]:::audio
+        Whisper[Whisper Tiny ONNX ASR]:::audio
+        LocalDB[(Local DB - ObjectBox)]:::db
+
+        FFI -->|Native Call| NativeLib
+        NativeLib -->|Statically Linked| FFmpegLibs
+        FFmpegLibs -->|Demux & PCM Decode| VAD
+        VAD -->|Speech Segments| Whisper
+        Whisper -->|ASR Transcripts| LocalDB
+    end
+
+    %% System Flows
+    Client -->|1. Upload Video| API
+    Client -->|4. Search Query| API
+    
+    VisionEngine -->|2. Generate Embeddings| QdrantService
+    API -->|5. Vectorize Query| TextEngine
+    TextEngine -->|6. Dense Search < 100ms| Qdrant
+    Qdrant -->|7. Timestamps| API
+    API -->|8. JSON Results| Client
+
+    %% App Integration Link
+    Client -.->|Bundled in Flutter App| AudioPipeline
 ```
 
 ---

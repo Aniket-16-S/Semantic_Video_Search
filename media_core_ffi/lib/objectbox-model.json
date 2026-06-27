@@ -1,0 +1,137 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:7713976757524249792",
+      "lastPropertyId": "4:6907992978872321294",
+      "name": "FrameEmbedding",
+      "properties": [
+        {
+          "id": "1:473164157140023672",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7816330484751169744",
+          "name": "mediaAssetId",
+          "indexId": "1:6743310155909358403",
+          "type": 11,
+          "flags": 520,
+          "relationTarget": "MediaAsset"
+        },
+        {
+          "id": "3:6922544754971818898",
+          "name": "timestampMs",
+          "type": 6
+        },
+        {
+          "id": "4:6907992978872321294",
+          "name": "visualVector",
+          "indexId": "2:8856058368327420223",
+          "type": 28,
+          "flags": 8
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:5340478602833278925",
+      "lastPropertyId": "6:6442497113210470175",
+      "name": "MediaAsset",
+      "properties": [
+        {
+          "id": "1:3664323223145021442",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8731682940608261209",
+          "name": "filePath",
+          "type": 9
+        },
+        {
+          "id": "3:1593783701497852872",
+          "name": "mediaType",
+          "indexId": "3:218370182803903895",
+          "type": 6,
+          "flags": 8
+        },
+        {
+          "id": "4:6342015677041979024",
+          "name": "durationMs",
+          "type": 6
+        },
+        {
+          "id": "5:7957217701986121481",
+          "name": "dateAddedMs",
+          "type": 6
+        },
+        {
+          "id": "6:6442497113210470175",
+          "name": "isFullyIndexed",
+          "type": 1
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:7415864909168669068",
+      "lastPropertyId": "6:6154025501165331678",
+      "name": "TranscriptSegment",
+      "properties": [
+        {
+          "id": "1:3809849612212397907",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8106776348320291620",
+          "name": "mediaAssetId",
+          "indexId": "4:8831971784047240680",
+          "type": 11,
+          "flags": 520,
+          "relationTarget": "MediaAsset"
+        },
+        {
+          "id": "3:2490205079717110403",
+          "name": "text",
+          "type": 9
+        },
+        {
+          "id": "4:5022394701016156308",
+          "name": "startTimeMs",
+          "type": 6
+        },
+        {
+          "id": "5:5882041210826318611",
+          "name": "endTimeMs",
+          "type": 6
+        },
+        {
+          "id": "6:6154025501165331678",
+          "name": "sourceType",
+          "indexId": "5:2893421811419798264",
+          "type": 6,
+          "flags": 8
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "3:7415864909168669068",
+  "lastIndexId": "5:2893421811419798264",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}

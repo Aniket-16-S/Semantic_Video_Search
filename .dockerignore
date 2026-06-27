@@ -39,6 +39,7 @@ pip-wheel-metadata/
 debug_siglip.py
 verify_setup.py
 check_qdrant.py
+re_quantize.py
 test_qdrant_data.py
 test_open.py
 test_inference.py
@@ -56,6 +57,17 @@ pubspec.lock
 native/
 ffmpeg-6.1.1/
 ffmpeg-6.1.1.tar.bz2
+ffmpeg-android-arm64/
+ffmpeg-windows-x64/
+*.o
+*.obj
+*.d
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+
 
 # ── Large Model Assets (excluded — mount as volumes or build separately) ──────
 models/

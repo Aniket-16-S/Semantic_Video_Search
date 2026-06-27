@@ -48,7 +48,7 @@ import 'package:native_assets_cli/native_assets_cli.dart';
 
 // ── Source and output layout ──────────────────────────────────────────────
 
-const _sourceFile = 'src/media_core.c';
+const _sourceFile = 'src/media_core.cpp';
 const _libName    = 'media_core';
 
 // ── Entry point ───────────────────────────────────────────────────────────
@@ -86,11 +86,21 @@ String? _resolveFfmpegDir(BuildConfig config) {
   final arch = config.targetArchitecture;
 
   if (os == OS.windows && arch == Architecture.x64) {
-    return Platform.environment['FFMPEG_WINDOWS_X64_DIR'];
+    final env = Platform.environment['FFMPEG_WINDOWS_X64_DIR'];
+    if (env != null && env.isNotEmpty) return env;
+    
+    // Hardcode known path to guarantee resolution
+    final fallback = 'C:\\AI Projects\\Semantic_Video_Search\\ffmpeg-windows-x64';
+    if (Directory(fallback).existsSync()) return fallback;
+    
+    throw Exception('FFmpeg directory not found at $fallback!');
   }
 
   if (os == OS.android && arch == Architecture.arm64) {
-    return Platform.environment['FFMPEG_ANDROID_ARM64_DIR'];
+    final env = Platform.environment['FFMPEG_ANDROID_ARM64_DIR'];
+    if (env != null && env.isNotEmpty) return env;
+    final fallback = config.packageRoot.resolve('../ffmpeg-android-arm64').toFilePath();
+    if (Directory(fallback).existsSync()) return fallback;
   }
 
   // Future: add arm32, x86 Android, macOS, iOS as needed.
@@ -124,7 +134,12 @@ Future<void> _compile(
   late List<String> compileCmd;
 
   if (os == OS.windows) {
-    compileCmd = _windowsCmd(srcPath, outPath, ffmpegInclude, ffmpegLib);
+    final gpp = _findGpp();
+    if (gpp == null) {
+      _fatalMissingCompiler(srcPath, outPath, ffmpegInclude, ffmpegLib);
+      return;
+    }
+    compileCmd = _windowsCmd(gpp, srcPath, outPath, ffmpegInclude, ffmpegLib);
   } else if (os == OS.android) {
     final ndkHome  = Platform.environment['ANDROID_NDK_HOME'] ?? _detectNdk();
     final compiler = _ndkClang(ndkHome);
@@ -134,6 +149,7 @@ Future<void> _compile(
   }
 
   print('[media_core_ffi] Compiling $os/${ config.targetArchitecture } …');
+  print('[media_core_ffi] Using compiler: ${compileCmd.first}');
   print('[media_core_ffi] $ ${compileCmd.join(' ')}');
 
   final result = await Process.run(
@@ -165,14 +181,76 @@ Future<void> _compile(
   );
 }
 
-// ── Windows compile command (MinGW gcc) ───────────────────────────────────
+// ── MinGW g++ auto-detection ─────────────────────────────────────────────
+
+/// Finds g++ by checking PATH first, then common MinGW/MSYS2/Git install dirs.
+String? _findGpp() {
+  // 1. Check PATH first (most common case if MSYS2 is set up)
+  final pathEnv = Platform.environment['PATH'] ?? '';
+  final pathDirs = pathEnv.split(';');
+
+  // Common standalone MinGW/MSYS2 locations to probe in addition to PATH
+  const extraDirs = [
+    r'C:\msys64\mingw64\bin',
+    r'C:\msys64\ucrt64\bin',
+    r'C:\msys32\mingw32\bin',
+    r'C:\MinGW\bin',
+    r'C:\mingw64\bin',
+    r'C:\mingw32\bin',
+    r'C:\ProgramData\chocolatey\bin',
+    r'C:\tools\mingw64\bin',
+  ];
+
+  for (final dir in [...pathDirs, ...extraDirs]) {
+    if (dir.isEmpty) continue;
+    final candidate = p.join(dir, 'g++.exe');
+    if (File(candidate).existsSync()) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/// Prints a clear error with the exact manual g++ command to copy-paste.
+void _fatalMissingCompiler(String src, String out, String include, String lib) {
+  final manualCmd = [
+    'g++', '-O2', '-shared', '-static', '-static-libgcc', '-static-libstdc++',
+    '-fPIC', '-DMEDIA_CORE_EXPORTS',
+    '-I$include', src, '-o', out,
+    '-L$lib', '-lavformat', '-lavcodec', '-lavutil', '-lswresample', '-lswscale',
+    '-lws2_32', '-lbcrypt', '-lsecur32', '-lcrypt32', '-lm', '-lpthread',
+  ].join(' ');
+
+  stderr.writeln('''
+[media_core_ffi] ✗ g++ (MinGW-w64) not found in PATH or common install dirs.
+
+  Install MinGW-w64 via MSYS2:
+    1. Download MSYS2 from https://www.msys2.org/
+    2. Run in MSYS2 terminal:  pacman -S mingw-w64-x86_64-gcc
+    3. Add C:\\msys64\\mingw64\\bin to your system PATH
+    4. Restart your terminal and re-run:  flutter run -d windows
+
+  OR compile the DLL manually right now by running this command
+  in an MSYS2 MinGW64 terminal:
+
+  $manualCmd
+
+  Then copy the output media_core.dll next to media_core_ffi.exe in:
+    build\\windows\\x64\\runner\\Debug\\
+''');
+}
+
+// ── Windows compile command (MinGW g++) ───────────────────────────────────
 
 List<String> _windowsCmd(
-  String src, String out, String include, String lib,
+  String gpp, String src, String out, String include, String lib,
 ) => [
-  'gcc',
+  gpp,
   '-O2',
   '-shared',                         // produce DLL
+  '-static',                         // bundle MinGW runtime (libgcc, libstdc++, winpthread)
+  '-static-libgcc',
+  '-static-libstdc++',
   '-fPIC',
   '-DMEDIA_CORE_EXPORTS',            // activate __declspec(dllexport) in header
   '-I$include',                      // FFmpeg headers
@@ -186,7 +264,10 @@ List<String> _windowsCmd(
   '-lswscale',
   '-lws2_32',                        // Windows sockets (required by libavformat)
   '-lbcrypt',                        // required by libavutil on Windows
+  '-lsecur32',
+  '-lcrypt32',
   '-lm',
+  '-lpthread',
 ];
 
 // ── Android compile command (NDK Clang) ───────────────────────────────────
@@ -250,7 +331,7 @@ String _ndkClang(String ndkHome) {
   final host      = isWindows ? 'windows-x86_64' : 'linux-x86_64';
   final ext       = isWindows ? '.cmd' : '';
   return '$ndkHome/toolchains/llvm/prebuilt/$host/bin/'
-         'aarch64-linux-android26-clang$ext';
+         'aarch64-linux-android26-clang++$ext';
 }
 
 void _fatalMissingFfmpeg(BuildConfig config) {

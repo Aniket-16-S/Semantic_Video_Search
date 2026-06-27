@@ -198,6 +198,7 @@ def quantize_model(fp32_path: str, int8_path: str, label: str) -> None:
         weight_type=QuantType.QInt8,
         # MatMulConstBOnly=True: quantize only MatMul ops with constant weights
         # (safer for transformer models — avoids quantizing dynamic activations)
+        op_types_to_quantize=['MatMul', 'Attention', 'Gather', 'EmbedLayerNormalization'],
         extra_options={"MatMulConstBOnly": True},
     )
     size_mb = os.path.getsize(int8_path) / 1e6

@@ -4,9 +4,12 @@ description: >
   audio demux + VAD engine (media_core.c) into a platform-native
   shared library callable from Dart via dart:ffi.
 
+  Phase 2: Ships an ObjectBox embedded vector database (HNSW index)
+  for local KNN semantic search over SigLIP SO400M 1152-dim embeddings.
+
   Supports Android (ARM64 via NDK) and Windows (x64 via MSVC/MinGW).
 
-version: 0.1.0
+version: 0.2.0
 publish_to: none   # local plugin — not published to pub.dev
 
 environment:
@@ -27,11 +30,32 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  ffi: ^2.1.0   # toNativeUtf8(), calloc.free() used in lib/media_core_ffi.dart
+  ffi: ^2.1.0          # toNativeUtf8(), calloc.free() used in lib/media_core_ffi.dart
+
+  # ── Phase 2: ObjectBox embedded vector database (HNSW) ────────────────────
+  objectbox: ^5.0.0            # core Dart API + query builder
+  objectbox_flutter_libs: any  # platform native libs (Android .so / Windows .dll)
+
+  # ── Phase 3: ONNX Runtime (Hardware accelerated inference) ────────────────
+  onnxruntime_v2: ^1.23.2+2
+
+  # ── Phase 4: Media ingestion & UI ──────────────────────────────────────────
+  photo_manager: ^3.0.0
+  path_provider: ^2.1.2
+  path: ^1.9.0
+  provider: ^6.1.2
+  video_thumbnail: ^0.5.3
 
 dev_dependencies:
-  ffigen: ^11.0.0          # generates lib/src/media_core_bindings.dart from media_core.h
-  native_assets_cli: any   # required by build.dart (imported as package:native_assets_cli)
+  flutter_test:
+    sdk: flutter             # provides expect, equals, group, test, setUp, tearDown
+  flutter_lints: ^3.0.0      # flutter analyze defaults
+  ffigen: ^11.0.0            # generates lib/src/media_core_bindings.dart from media_core.h
+  native_assets_cli: ^0.1.0   # Required by the legacy build.dart script
+
+  # ── Phase 2: ObjectBox code generation ───────────────────────────────────
+  build_runner: ^2.4.0       # dart run build_runner build
+  objectbox_generator: any   # emits objectbox.g.dart from @Entity annotations
 
 # ── ffigen configuration (run: dart run ffigen --config pubspec.yaml) ──────
 ffigen:
@@ -56,3 +80,13 @@ ffigen:
   structs:
     include:
       - "AudioBufferResult"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/vision_encoder_int8.onnx
+    - assets/models/text_encoder_int8.onnx
+    - assets/models/ppocr_det_int8.onnx
+    - assets/models/ppocr_rec_int8.onnx
+    # Bundle the entire Whisper directory:
+    - assets/models/whisper_tiny_int8/

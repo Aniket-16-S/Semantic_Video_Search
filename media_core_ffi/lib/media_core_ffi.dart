@@ -33,7 +33,7 @@
 library media_core_ffi;
 
 import 'dart:ffi' as ffi;
-import 'dart:io' show Platform;
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
@@ -50,18 +50,52 @@ export 'src/media_core_bindings.dart' show MediaCoreBindings, AudioBufferResult;
 /// On Windows  → media_core.dll
 /// On Android  → libmedia_core.so
 /// Other Linux → libmedia_core.so (e.g. for desktop Linux future support)
-MediaCoreBindings _loadBindings() {
-  const _libName = 'media_core';
+import 'package:path/path.dart' as p;
 
-  final lib = Platform.isWindows
-      ? ffi.DynamicLibrary.open('$_libName.dll')
-      : ffi.DynamicLibrary.open('lib$_libName.so');
+/// Returns null (and prints a warning) if the native DLL cannot be found,
+/// instead of throwing and crashing the calling isolate.
+MediaCoreBindings? _tryLoadBindings() {
+  const libName = 'media_core';
 
-  return MediaCoreBindings(lib);
+  try {
+    if (Platform.isWindows) {
+      // Attempt 1: DLL next to the executable (Flutter's standard bundle location)
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final dllNextToExe = p.join(exeDir, '$libName.dll');
+      if (File(dllNextToExe).existsSync()) {
+        return MediaCoreBindings(ffi.DynamicLibrary.open(dllNextToExe));
+      }
+
+      // Attempt 2: bare name (Windows DLL search path)
+      try {
+        return MediaCoreBindings(ffi.DynamicLibrary.open('$libName.dll'));
+      } catch (_) {}
+
+      // Attempt 3: native_assets build output folder
+      final rootDir = Directory(exeDir).parent.parent.parent.parent.path;
+      final nativeAssetPath = p.join(rootDir, 'native_assets', 'windows', '$libName.dll');
+      if (File(nativeAssetPath).existsSync()) {
+        return MediaCoreBindings(ffi.DynamicLibrary.open(nativeAssetPath));
+      }
+
+      stderr.writeln(
+        '[media_core_ffi] WARNING: $libName.dll not found. '
+        'FFmpeg-based audio/video extraction is DISABLED. '
+        'Run `flutter run` from within the project so build.dart can compile it.',
+      );
+      return null;
+    } else {
+      return MediaCoreBindings(ffi.DynamicLibrary.open('lib$libName.so'));
+    }
+  } catch (e) {
+    stderr.writeln('[media_core_ffi] WARNING: Failed to load $libName: $e');
+    return null;
+  }
 }
 
-/// Singleton [MediaCoreBindings] instance. Loaded lazily on first use.
-final MediaCoreBindings _bindings = _loadBindings();
+/// Nullable singleton. `null` means the native DLL is unavailable on this run.
+/// All [MediaCore] methods check this and return null/empty gracefully.
+MediaCoreBindings? _bindings = _tryLoadBindings();
 
 // ── Public API ─────────────────────────────────────────────────────────────────
 
@@ -88,17 +122,18 @@ class MediaCore {
   /// **Threading**: This call blocks the calling isolate for the full duration
   /// of the demux/decode/resample pipeline. Always run it via [compute()].
   static Uint8List? extractAudio(String videoPath, {int threshold = 300}) {
+    if (_bindings == null) return null; // DLL unavailable
     // Allocate native UTF-8 string for the path
     final pathPtr = videoPath.toNativeUtf8().cast<ffi.Char>();
-    AudioBufferResult? result;
+    late final AudioBufferResult result;
     try {
-      result = _bindings.extract_audio_pcm(pathPtr);
+      result = _bindings!.extract_audio_pcm(pathPtr);
     } finally {
       // Always free the path string — independent of whether extraction succeeded
       malloc.free(pathPtr);
     }
 
-    if (result == null || result.sample_count <= 0 || result.data == ffi.nullptr) {
+    if (result.sample_count <= 0 || result.data == ffi.nullptr) {
       return null;
     }
 
@@ -113,7 +148,7 @@ class MediaCore {
       return bytes;
     } finally {
       // Release the native PCM buffer allocated by extract_audio_pcm()'s malloc()
-      _bindings.free_audio_buffer(result.data);
+      _bindings!.free_audio_buffer(result.data);
     }
   }
 
@@ -122,7 +157,8 @@ class MediaCore {
   /// Useful for implementing a custom VAD gate or metering UI.
   /// Returns 0 if [samples] is empty.
   static int rms(ffi.Pointer<ffi.Int16> samples, int sampleCount) {
-    return _bindings.vad_rms(samples, sampleCount);
+    if (_bindings == null) return 0;
+    return _bindings!.vad_rms(samples, sampleCount);
   }
 
   /// Returns `true` if the RMS of [samples] exceeds [threshold].
@@ -133,6 +169,185 @@ class MediaCore {
     int sampleCount, {
     int threshold = 300,
   }) {
-    return _bindings.vad_is_speech(samples, sampleCount, threshold) == 1;
+    if (_bindings == null) return false;
+    return _bindings!.vad_is_speech(samples, sampleCount, threshold) == 1;
+  }
+  
+  /// Extract scene-changed keyframes natively using FFmpeg C API and SAD pixel-diffing.
+  /// Normalizes RGB24 to Float32 CHW inside C++ to skip Dart processing.
+  static List<Map<String, dynamic>>? extractVideoFrames(String videoPath, {double sceneThreshold = 0.3}) {
+    if (_bindings == null) return null; // DLL unavailable
+    final pathPtr = videoPath.toNativeUtf8().cast<ffi.Char>();
+    late final VideoExtractionResult result;
+    try {
+      result = _bindings!.extract_video_frames(pathPtr, sceneThreshold);
+    } finally {
+      malloc.free(pathPtr);
+    }
+
+    if (result.frame_count <= 0 || result.frames == ffi.nullptr) {
+      return null;
+    }
+
+    try {
+      final framesList = <Map<String, dynamic>>[];
+      for (int i = 0; i < result.frame_count; i++) {
+        final frame = result.frames[i];
+        final floatCount = 384 * 384 * 3;
+        final float32List = Float32List(floatCount);
+        
+        final nativeFloats = frame.data;
+        for (int j = 0; j < floatCount; j++) {
+          float32List[j] = nativeFloats[j];
+        }
+        
+        framesList.add({
+          'data': float32List,
+          'timestamp_s': frame.timestamp_s,
+        });
+      }
+      return framesList;
+    } finally {
+      _bindings!.free_video_frames(result);
+    }
+  }
+
+  /// Compute 80-bin Mel-spectrogram natively in C++ using pocketfft.
+  /// Returns a Float32List of shape [1, 80, 3000].
+  static Float32List? computeMel(Uint8List pcmBytes) {
+    if (_bindings == null) return null; // DLL unavailable
+    final int16List = pcmBytes.buffer.asInt16List(pcmBytes.offsetInBytes, pcmBytes.lengthInBytes ~/ 2);
+    
+    // Allocate native int16 array
+    final ptr = malloc<ffi.Int16>(int16List.length);
+    for (int i = 0; i < int16List.length; i++) {
+      ptr[i] = int16List[i];
+    }
+    
+    late final WhisperMelResult result;
+    try {
+      result = _bindings!.whisper_compute_mel(ptr, int16List.length);
+    } finally {
+      malloc.free(ptr);
+    }
+
+    if (result.size <= 0 || result.data == ffi.nullptr) {
+      return null;
+    }
+
+    try {
+      final float32List = Float32List(result.size);
+      for (int i = 0; i < result.size; i++) {
+        float32List[i] = result.data[i];
+      }
+      return float32List;
+    } finally {
+      _bindings!.free_whisper_mel(result);
+    }
+  }
+
+  /// Decode BPE tokens using tokenizer.json in C++.
+  static String? decodeTokens(List<int> tokens, String tokenizerPath) {
+    if (_bindings == null) return null; // DLL unavailable
+    if (tokens.isEmpty) return "";
+
+    final tokensPtr = malloc<ffi.Int>(tokens.length);
+    for (int i = 0; i < tokens.length; i++) {
+      tokensPtr[i] = tokens[i];
+    }
+
+    final pathPtr = tokenizerPath.toNativeUtf8().cast<ffi.Char>();
+    
+    ffi.Pointer<ffi.Char> resultPtr = ffi.nullptr;
+    try {
+      resultPtr = _bindings!.whisper_decode_tokens(tokensPtr, tokens.length, pathPtr);
+      if (resultPtr == ffi.nullptr) return null;
+      return resultPtr.cast<Utf8>().toDartString();
+    } finally {
+      malloc.free(tokensPtr);
+      malloc.free(pathPtr);
+      if (resultPtr != ffi.nullptr) {
+        _bindings!.free_string(resultPtr);
+      }
+    }
+  }
+
+  /// Extracts bounding boxes natively from DBNet Float32 heatmap.
+  /// Returns a list of 8-point polygons [tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y].
+  static List<List<double>> extractOcrBBoxes(Float32List heatmap, int width, int height, {double threshold = 0.3}) {
+    if (_bindings == null) return []; // DLL unavailable
+    final ptr = malloc<ffi.Float>(heatmap.length);
+    for (int i = 0; i < heatmap.length; i++) {
+      ptr[i] = heatmap[i];
+    }
+
+    late final OcrBoxResult result;
+    try {
+      result = _bindings!.ocr_extract_bboxes(ptr, width, height, threshold);
+    } finally {
+      malloc.free(ptr);
+    }
+
+    if (result.box_count <= 0 || result.boxes == ffi.nullptr) {
+      return [];
+    }
+
+    try {
+      final boxes = <List<double>>[];
+      for (int i = 0; i < result.box_count; i++) {
+        final box = result.boxes[i];
+        final pts = <double>[];
+        for (int j = 0; j < 8; j++) {
+          pts.add(box.pts[j]);
+        }
+        boxes.add(pts);
+      }
+      return boxes;
+    } finally {
+      _bindings!.free_ocr_boxes(result);
+    }
+  }
+
+  /// Natively perspective warps a 4-point bounding box from CHW float tensor into a flattened Float32 CHW tensor.
+  static Map<String, dynamic>? cropAndWarpOcr(Float32List imageChw, int imgW, int imgH, List<double> boxPts, {int targetHeight = 48}) {
+    if (_bindings == null) return null; // DLL unavailable
+    if (boxPts.length != 8) return null;
+
+    final imgPtr = malloc<ffi.Float>(imageChw.length);
+    for (int i = 0; i < imageChw.length; i++) {
+      imgPtr[i] = imageChw[i];
+    }
+
+    final boxPtr = malloc<OcrBoundingBox>();
+    for (int i = 0; i < 8; i++) {
+      boxPtr.ref.pts[i] = boxPts[i];
+    }
+
+    late final OcrCropResult result;
+    try {
+      result = _bindings!.ocr_crop_and_warp(imgPtr, imgW, imgH, boxPtr.ref, targetHeight);
+    } finally {
+      malloc.free(imgPtr);
+      malloc.free(boxPtr);
+    }
+
+    if (result.width <= 0 || result.data == ffi.nullptr) {
+      return null;
+    }
+
+    try {
+      final floatCount = 3 * result.width * result.height;
+      final float32List = Float32List(floatCount);
+      for (int i = 0; i < floatCount; i++) {
+        float32List[i] = result.data[i];
+      }
+      return {
+        'data': float32List,
+        'width': result.width,
+        'height': result.height,
+      };
+    } finally {
+      _bindings!.free_ocr_crop(result);
+    }
   }
 }
