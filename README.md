@@ -44,80 +44,68 @@ Designed for low resource environments, the entire pipeline runs efficiently on 
 # System Architecture
 
 ```mermaid
-flowchart TB
-    %% Styling
-    classDef client fill:#e1f5fe,stroke:#039be5,stroke-width:2px,color:#01579b;
-    classDef api fill:#efebe9,stroke:#8d6e63,stroke-width:2px,color:#3e2723;
-    classDef ingestion fill:#e8f5e9,stroke:#4caf50,stroke-width:2px,color:#1b5e20;
-    classDef search fill:#fff3e0,stroke:#ff9800,stroke-width:2px,color:#e65100;
-    classDef audio fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px,color:#4a148c;
-    classDef db fill:#eceff1,stroke:#607d8b,stroke-width:2px,color:#263238;
+graph TD
+    %% Define Styles
+    classDef client fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef backend fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    classDef pipeline fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px;
+    classDef storage fill:#e3f2fd,stroke:#0d47a1,stroke-width:2px;
+    classDef ondevice fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
 
-    %% Client App
-    Client[Client / App UI]:::client
-
-    %% Backend Services Subgraph
-    subgraph Backend["FastAPI Backend (Search & Ingestion Server)"]
-        API[FastAPI Router]:::api
-        BG[Background Worker]:::api
-        API -->|Delegate Ingestion| BG
-    end
-
-    %% Ingestion Pipeline
-    subgraph Ingestion["Video Ingestion Pipeline (Producer-Consumer)"]
-        Prod[VideoFrameProducer Thread]:::ingestion
-        Decode[FFmpeg Smart Decoder]:::ingestion
-        Queue[Bounded Buffer Queue]:::ingestion
-        Cons[InferenceConsumer Thread]:::ingestion
-        VisionEngine[SigLIP Vision Engine ONNX]:::ingestion
-
-        BG -->|Spawn| Prod
-        Prod -->|Scene-Change Filter| Decode
-        Decode -->|Raw RGB Frames| Queue
-        Queue -->|Batch Fetch| Cons
-        Cons -->|Run Inference| VisionEngine
-    end
-
-    %% Search Pipeline
-    subgraph SearchFlow["Semantic Search Engine"]
-        TextEngine[SigLIP Text Engine ONNX]:::search
-    end
-
-    %% Vector Database
-    subgraph VectorStore["Vector Database & Storage"]
-        Qdrant[(Qdrant DB)]:::db
-        QdrantService[Qdrant Ingestion Service]:::db
-        QdrantService -->|INT8 Quantized MMAP| Qdrant
-    end
-
-    %% On-Device Audio Pipeline
-    subgraph AudioPipeline["On-Device Audio & Transcription (media_core_ffi)"]
-        FFI[Dart FFI Binding]:::audio
-        NativeLib[media_core.c]:::audio
-        FFmpegLibs[FFmpeg Static Libs]:::audio
-        VAD[Voice Activity Detection]:::audio
-        Whisper[Whisper Tiny ONNX ASR]:::audio
-        LocalDB[(Local DB - ObjectBox)]:::db
-
-        FFI -->|Native Call| NativeLib
-        NativeLib -->|Statically Linked| FFmpegLibs
-        FFmpegLibs -->|Demux & PCM Decode| VAD
-        VAD -->|Speech Segments| Whisper
-        Whisper -->|ASR Transcripts| LocalDB
-    end
-
-    %% System Flows
-    Client -->|1. Upload Video| API
-    Client -->|4. Search Query| API
+    Client["CLIENT / APP UI"]:::client
     
-    VisionEngine -->|2. Generate Embeddings| QdrantService
-    API -->|5. Vectorize Query| TextEngine
-    TextEngine -->|6. Dense Search < 100ms| Qdrant
-    Qdrant -->|7. Timestamps| API
-    API -->|8. JSON Results| Client
+    subgraph BE ["FASTAPI BACKEND"]
+        Router["FastAPI Router"]
+        Worker["Background Worker - Ingestion Orchestrator"]
+        SearchEngine["SEMANTIC SEARCH ENGINE - SigLIP Text Engine ONNX"]
+    end
 
-    %% App Integration Link
-    Client -.->|Bundled in Flutter App| AudioPipeline
+    subgraph VIP ["VIDEO INGESTION PIPELINE"]
+        Producer["VideoFrameProducer Thread"]
+        FFmpeg["FFmpeg Smart Decoder"]
+        Queue["Bounded Buffer Queue"]
+        Consumer["InferenceConsumer Thread"]
+        SigLIP["SigLIP Vision Engine ONNX"]
+    end
+
+    subgraph VDB ["VECTOR DATABASE & STORAGE"]
+        QIngest["Qdrant Ingestion Service"]
+        QDB["Qdrant DB - HNSW Index"]
+    end
+
+    subgraph ODA ["ON-DEVICE AUDIO & TRANSCRIPTION"]
+        FFI["Dart FFI Binding"]
+        MediaCore["media_core.c"]
+        FFmpegStatic["FFmpeg Static Libs"]
+        VAD["Voice Activity Detection"]
+        Whisper["Whisper Tiny ONNX ASR"]
+        LocalDB["Local DB ObjectBox"]
+    end
+
+    %% Apply styles to the internal nodes to avoid 'end:::' issues
+    class Router,Worker,SearchEngine backend;
+    class Producer,FFmpeg,Queue,Consumer,SigLIP pipeline;
+    class QIngest,QDB storage;
+    class FFI,MediaCore,FFmpegStatic,VAD,Whisper,LocalDB ondevice;
+
+    %% Ingestion Flow
+    Client -- "1. Upload Video" --> Router
+    Router -.->|Delegate Ingestion| Worker
+    Worker -->|Spawn| Producer
+    Producer --> FFmpeg --> Queue --> Consumer --> SigLIP
+    SigLIP -->|2. Generate Embeddings| QIngest
+    QIngest -->|INT8 Quantized MMAP| QDB
+
+    %% Search Flow
+    Client -- "4. Search Query" --> Router
+    Router --> SearchEngine
+    SearchEngine -->|6. Dense Search| QDB
+    QDB -->|7. Timestamps| Router
+    Router -->|8. JSON Results| Client
+
+    %% On-Device Flow
+    Client -.->|Bundled in| FFI
+    FFI --> MediaCore --> FFmpegStatic --> VAD --> Whisper --> LocalDB
 ```
 
 ---
